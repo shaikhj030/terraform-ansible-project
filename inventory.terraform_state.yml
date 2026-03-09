@@ -1,0 +1,17 @@
+plugin: cloud.terraform.terraform_state
+backend_type: s3
+backend_config:
+  bucket : "inventory-bucket-09032026"
+  key : "terraform.tfstate"
+  region : "us-east-1"
+hostnames:
+  - public_ip
+  - private_ip
+compose:
+  ansible_host: public_ip
+attributes:
+  - tags
+keyed_groups:
+  - key: tags.Role
+    prefix: role
+    separator: "_"

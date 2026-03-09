@@ -1,0 +1,44 @@
+---
+- name: Configure Web Servers
+  hosts: all
+  become: yes  # Runs tasks as sudo
+  vars:
+    # Logic to pick the correct service name based on OS
+    web_service: "{{ (ansible_os_family == 'Debian') | ternary('apache2', 'httpd') }}"
+
+  tasks:
+    - name: Update and install on Ubuntu (Debian family)
+      ansible.builtin.apt:
+        name: apache2
+        update_cache: yes
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Update and install on Red Hat (RedHat family)
+      ansible.builtin.dnf:
+        name: httpd
+        update_cache: yes
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Copy custom index.html
+      ansible.builtin.copy:
+        src: index.html
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Apache
+
+    - name: Ensure Web Server is started
+      ansible.builtin.service:
+        name: "{{ web_service }}"
+        state: started
+        enabled: yes
+        
+        
+  handlers:
+    - name: Restart Apache
+      ansible.builtin.service:
+        name: "{{ web_service }}"
+        state: restarted
