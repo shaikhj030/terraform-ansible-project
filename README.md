@@ -11,6 +11,7 @@ ansible-galaxy collection install cloud.terraform
 
 Inventory File: You created inventory.terraform_state.yml to pull data from S3:
 yaml
+
 plugin: cloud.terraform.terraform_state
 
 backend_type: s3
