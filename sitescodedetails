@@ -1,0 +1,9 @@
+This is a piece of Ansible logic used to make your playbooks "smart" enough to work on different operating systems (like Ubuntu and Red Hat) at the same time.
+The Breakdown
+vars:: This section defines a variable named web_service.
+ansible_os_family: This is a "fact" Ansible automatically discovers about your server.
+If the server is Ubuntu or Debian, the value is Debian.
+If the server is Red Hat, CentOS, or Amazon Linux, the value is RedHat.
+| ternary('apache2', 'httpd'): This is an "If/Else" filter.
+IF the condition (ansible_os_family == 'Debian') is True, use the first value: apache2.
+ELSE (if it's False), use the second value: httpd.
