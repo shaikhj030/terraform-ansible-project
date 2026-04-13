@@ -7,6 +7,13 @@
     web_service: "{{ (ansible_os_family == 'Debian') | ternary('apache2', 'httpd') }}"
 
   tasks:
+  #=====================================================================================
+  - name: Install the web server package
+      package:
+        name: "{{ web_service }}"
+        state: present
+  ###  OR #############
+  #======================================================================================
     - name: Update and install on Ubuntu (Debian family)
       ansible.builtin.apt:
         name: apache2
@@ -20,7 +27,7 @@
         update_cache: yes
         state: present
       when: ansible_os_family == "RedHat"
-
+#===========================================================================================
     - name: Copy custom index.html
       ansible.builtin.copy:
         src: index.html
