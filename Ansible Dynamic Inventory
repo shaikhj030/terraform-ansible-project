@@ -1,0 +1,48 @@
+plugin: cloud.terraform.terraform_state
+backend_type: s3
+backend_config:
+  bucket : "inventory-bucket-09032026"
+  key : "terraform.tfstate"
+  region : "us-east-1"
+hostnames:
+  - public_ip
+  - private_ip
+compose:
+  ansible_host: public_ip
+attributes:
+  - tags
+keyed_groups:
+  - key: tags.Role
+    prefix: role
+    separator: "_"
+
+Important Setup Step
+Ensure you have the cloud.terraform collection installed on your machine so the plugin can work:
+#ansible-galaxy collection install cloud.terraform
+
+Notes: Ansible Dynamic Inventory for Terraform (S3 Backend)
+Core Purpose
+This file is a Bridge. It allows Ansible to read Terraform's "memory" (the state file) stored in AWS S3. It automatically finds the IP addresses and tags of your servers so you don't have to type them manually into a static inventory file.
+
+1. Connection Settings (Where is the data?)
+plugin: cloud.terraform.terraform_state: Tells Ansible: "Don't look for a text file; use the Terraform plugin to find my servers."
+backend_type: s3: Specifies that the Terraform state is stored in an AWS S3 bucket.
+backend_config: The exact "GPS coordinates" for the state file:
+bucket: The name of the S3 bucket.
+key: The specific filename (terraform.tfstate).
+region: The AWS data center location.
+
+2. Identity & Connection (How do I talk to them?)
+hostnames: A priority list. Ansible looks for a public_ip first; if it’s missing, it uses the private_ip.
+compose: Creates a shortcut variable. It maps ansible_host to the public_ip so Ansible knows exactly which IP to SSH into.
+
+3. Metadata (What do I know about them?)
+attributes: - tags: Import all the labels (Tags) you created in Terraform (like Name, Environment, or Role) so Ansible can see them.
+
+4. Smart Grouping (The "Keyed Groups")
+This is the most powerful part. It automatically categorizes servers into groups based on their Terraform tags.
+key: tags.Role: Look for the tag named "Role."
+prefix: role: Start the group name with "role."
+separator: "_": Use an underscore between the prefix and the tag value.
+
+Example: If Terraform has a server with the tag Role = "webserver", Ansible automatically creates a group called role_webserver. You can now target all web servers at once!
