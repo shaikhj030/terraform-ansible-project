@@ -1,3 +1,71 @@
+---
+- name: Configure Web Servers
+  hosts: all
+  become: yes  # Runs tasks as sudo
+  vars:
+    # Logic to pick the correct service name based on OS
+    web_service: "{{ (ansible_os_family == 'Debian') | ternary('apache2', 'httpd') }}"
+
+  tasks:
+  #=====================================================================================
+  - name: Install the web server package
+      package:
+        name: "{{ web_service }}"
+        state: present
+  ###  OR #############
+  #======================================================================================
+    - name: Update and install on Ubuntu (Debian family)
+      ansible.builtin.apt:
+        name: apache2
+        update_cache: yes
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Update and install on Red Hat (RedHat family)
+      ansible.builtin.dnf:
+        name: httpd
+        update_cache: yes
+        state: present
+      when: ansible_os_family == "RedHat"
+#===========================================================================================
+    - name: Copy custom index.html
+      ansible.builtin.copy:
+        src: index.html
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Apache
+
+    - name: Ensure Web Server is started
+      ansible.builtin.service:
+        name: "{{ web_service }}"
+        state: started
+        enabled: yes
+      
+  handlers:
+    - name: Restart Apache
+      ansible.builtin.service:
+        name: "{{ web_service }}"
+        state: restarted
+
+This is the header and configuration section of an Ansible Playbook. It sets the "rules of engagement" for all the tasks that follow.
+The Breakdown
+---: This marks the start of a YAML file. It’s a standard way to tell the computer, "A new document starts here."
+- name: Configure Web Servers: This is a human-readable label. When you run the playbook, this title appears in your terminal so you know exactly what Ansible is doing at that moment.
+hosts: all: This tells Ansible which servers to target.
+all means every server found in your dynamic inventory (the one reading from your S3 bucket).
+If you only wanted to target specific servers, you could change this to role_webserver.
+become: yes: This is the equivalent of typing sudo. It tells Ansible to log in as a normal user but execute all commands with root/admin privileges. Without this, you wouldn't be able to install software or restart services.
+vars:: This starts the variables section.
+web_service: You are creating a custom variable that automatically "calculates" the right service name (apache2 for Ubuntu/Debian or httpd for Red Hat) based on the OS it discovers.
+
+How this connects to your previous code:
+From Terraform: You created Red Hat and Ubuntu servers.
+From Dynamic Inventory: Ansible found those servers in your S3 bucket.
+In this Playbook: Because of hosts: all and your web_service logic, this single playbook will correctly configure both the Red Hat and Ubuntu servers at the same time.
+
+
 This is a piece of Ansible logic used to make your playbooks "smart" enough to work on different operating systems (like Ubuntu and Red Hat) at the same time.
 The Breakdown
 vars:: This section defines a variable named web_service.
@@ -7,3 +75,73 @@ If the server is Red Hat, CentOS, or Amazon Linux, the value is RedHat.
 | ternary('apache2', 'httpd'): This is an "If/Else" filter.
 IF the condition (ansible_os_family == 'Debian') is True, use the first value: apache2.
 ELSE (if it's False), use the second value: httpd.
+
+To install the correct package first, we use the exact same logic. Since the service name and the package name are usually identical, you can reuse the variable.
+Here is how you combine the variable and the task into a single, clean playbook that works on both Ubuntu (Debian) and Red Hat:
+The Multi-OS Playbook
+yaml
+- name: Install and Start Web Server
+  hosts: all
+  become: yes
+  vars:
+    # Logic: if Debian use 'apache2', otherwise use 'httpd'
+    web_pkg: "{{ (ansible_os_family == 'Debian') | ternary('apache2', 'httpd') }}"
+
+  tasks:
+    - name: Install the web server package
+      package:
+        name: "{{ web_pkg }}"
+        state: present
+
+    - name: Ensure the web service is started
+      service:
+        name: "{{ web_pkg }}"
+        state: started
+        enabled: yes
+
+Why this is better:
+The package module: Instead of using apt or yum, the package module is "generic." It uses whatever tool the OS has (like a universal remote).
+No Redundancy: You don't have to write one block for Red Hat and another for Ubuntu.
+Automatic Detection: Ansible runs "Gathering Facts" at the start, so it already knows the ansible_os_family before it even starts the first task.
+Pro-Tip: Adding a Third Option
+If you need to support more than just two choices (e.g., adding Windows or Arch Linux), a simple "Either/Or" (ternary) isn't enough. You would use a dictionary lookup instead:
+yaml
+vars:
+  web_pkg_map:
+    Debian: apache2
+    RedHat: httpd
+    Suse: apache2
+    Archlinux: apache
+  
+  # This picks the right name based on the OS family
+  web_pkg: "{{ web_pkg_map[ansible_os_family] }}"
+
+This section contains the Tasks (the actions) and the Handler (the reaction). It is the "heavy lifting" part of your playbook.
+
+1. The "Copy custom index.html" Task
+This task places your website file onto the server.
+ansible.builtin.copy: The module used to move a file from your local computer to the remote server.
+src: index.html: The source file (located on your laptop/control node).
+dest: /var/www/html/index.html: The standard location where web servers look for files to display.
+owner/group/mode: Sets security permissions. 0644 means the owner can read/write, but everyone else can only read.
+notify: Restart Apache: This is a trigger. It says: "If this file actually changes, please run the 'Restart Apache' handler at the very end."
+
+2. The "Ensure Web Server is started" Task
+This ensures the software is actually running.
+name: "{{ web_service }}": Uses your smart variable from earlier to pick apache2 or httpd.
+state: started: Makes sure the service is currently running.
+enabled: yes: Ensures that if the server reboots, the web server starts back up automatically.
+
+3. The "Handlers" Section
+A handler is a special task that only runs if notified.
+name: Restart Apache: This must match the notify name exactly.
+Why use a handler? You don't want to restart the web server every single time you run the playbook. You only want to restart it if the configuration or the index.html file was updated. It saves time and prevents unnecessary downtime.
+
+The Full Workflow Summary:
+Ansible logs in as sudo (become: yes).
+It identifies the OS and sets web_service.
+It copies your index.html. If the file is new or different, it "marks" the Restart handler to run later.
+It checks if the service is started.
+At the very end, if the handler was marked, it restarts the web server to apply the changes.
+
+
