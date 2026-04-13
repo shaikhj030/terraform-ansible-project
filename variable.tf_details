@@ -1,0 +1,122 @@
+# variables.tf define the EC2 instance 
+This is a Terraform variable definition. It’s a way to create a reusable template so you can launch multiple, slightly different servers without writing redundant code.
+Think of it as a dictionary of server blueprints.
+
+1. The Structure (type = map(object({ ... })))
+map: This tells Terraform you have a list of labeled groups (keys). Here, the keys are "redhat-server" and "ubuntu-server".
+object: This acts like a strict "schema." Every server you define must have exactly these four things: an AMI, an instance type, a name, and a SSH key path.
+
+In Terraform, these three terms work together to define how much data a resource needs and what happens if you forget to provide it.
+
+1. The object (The Form Template)
+An object is a strict template. It defines exactly which fields are required and what type of data (text, number, etc.) goes into each field.
+Purpose: It groups related data together so you don't have 10 separate variables for one server.
+In your code: The object({ ami = string, ... }) part says, "Every server MUST have an AMI string, a type string, a name string, and a path string."
+
+2. The map (The Filing Cabinet)
+A map is a collection of those objects, each filed under a unique Key (a label).
+Purpose: It allows you to manage multiple resources using a single variable name.
+In your code: You have a map where the "labels" are redhat-server and ubuntu-server. Each label opens up a specific "folder" (the object) containing that server's unique details.
+  
+3. The default (The Preset Values)
+The default is the "plan B." If you run terraform apply and don't manually provide new data for that variable, Terraform will use whatever is written in the default block.
+Purpose: It makes your code "plug and play." You can run it immediately without typing in settings every single time.
+In your code: The default block contains the actual AMI IDs and instance types for Red Hat and Ubuntu so the code works right out of the box.
+
+How they work together to "Implement" Resources
+When you actually create the resources (using a resource block), you use a for_each loop. This tells Terraform: "Look at my map, take every object inside it, and create one resource for each using the default values I provided."
+
+In Terraform, a map is a data structure used to store a collection of key-value pairs. Every key in a map must be a unique string, and all the values must be of the same data type (e.g., all strings, all numbers, or all objects). 
+
+It is very similar to a dictionary in Python or an object in JavaScript. 
+
+Key Characteristics
+Structure: Maps are defined using curly braces {} with key-value pairs separated by either an equal sign = or a colon :.
+Unordered: By default, Terraform maps are considered unordered collections.
+Homogeneous Values: All values within a single map must share the same type (like map(string)). If you need a mixture of different types for different keys, you should use an object type instead. 
+
+Common Use Cases
+Environment Specifics: Storing different settings for dev, staging, and prod in one place.
+Resource Tags: Grouping metadata tags that need to be applied to multiple cloud resources.
+Dynamic Lookups: Selecting a specific value, like an AMI ID, based on a provided variable like "region". 
+
+Simple Example: map(string)
+This example shows a map variable used to manage instance types for different environments. 
+hcl
+variable "instance_types" {
+  type = map(string)
+  default = {
+    "dev"  = "t2.micro"
+    "prod" = "m5.large"
+  }
+}
+
+# To access a value, use square brackets:
+# var.instance_types["dev"]  -> returns "t2.micro"
+
+Accessing Values
+You can retrieve a value from a map using two primary methods: 
+Index Syntax: Use var.map_name["key"] for direct access.
+lookup() function: Use lookup(map, key, default) if you want to provide a fallback value in case the key doesn't exist.
+
+how to use a map with a for_each loop to create multiple resources at once?
+The syntax for a for_each loop is used within a resource, data, or module block to create multiple instances of that object based on a map or a set of strings
+Basic Syntax Structure
+When you use for_each, Terraform provides a special each object that allows you to access the current item's data:
+
+each.key: The map key (or the value itself if using a set).
+each.value: The value associated with that key (for maps).
+
+  resource "resource_type" "resource_name" {
+  for_each = var.your_collection # Must be a map or set
+
+  # Accessing the data
+  attribute = each.value.some_property
+  tag_name  = each.key
+}
+
+Examples by Collection Type
+1. Using a Map (Best for Customization)
+Maps allow you to assign unique values to specific keys. This is ideal for resources that need different configurations.
+
+resource "aws_instance" "example" {
+  for_each = {
+    "web-server" = "t3.micro"
+    "db-server"  = "t3.medium"
+  }
+
+  instance_type = each.value  # e.g., "t3.micro"
+  tags = {
+    Name = each.key          # e.g., "web-server"
+  }
+}
+
+2. Using a Set (Best for Simple Lists)
+If you have a list of strings, you must convert it to a set using the toset() function before for_each can use it.
+
+  resource "aws_iam_user" "users" {
+  for_each = toset(["Alice", "Bob", "Charlie"])
+
+  name = each.key # In a set, each.key and each.value are the same
+}
+
+  3. Using a Map of Objects (Complex Implementation)
+This matches the instance_configs variable you shared earlier. It allows for highly detailed, named resources.
+
+  resource "aws_instance" "server" {
+  for_each = var.instance_configs
+
+  ami           = each.value.ami
+  instance_type = each.value.instance_type
+  
+  tags = {
+    Name = each.value.name
+  }
+}
+
+  Important Syntax Rules
+Known Values: The keys in your map or values in your set must be known before Terraform runs (you cannot use IDs that are generated during the creation of other resources).
+Uniqueness: Map keys must be unique strings.
+No count: You cannot use both for_each and count in the same resource block.
+
+  
